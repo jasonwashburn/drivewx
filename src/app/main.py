@@ -4,7 +4,13 @@ from fastapi import FastAPI
 
 from drivewx.mapbox import get_route_info
 from drivewx.models import Coord
-from drivewx.route import create_times_from_durations, split_coords_by_duration_interval
+from drivewx.route import (
+    create_feature_collection,
+    create_line_strings_from_segments,
+    create_times_from_durations,
+    split_coords_by_duration_interval,
+    split_coords_into_segments,
+)
 
 app = FastAPI()
 
@@ -28,16 +34,16 @@ async def route(
     if route := await get_route_info([start_coord, end_coord]):
         coords = route.get_coords()
         durations = route.get_durations()
-        stepped_coords, stepped_durations = split_coords_by_duration_interval(
-            coords, durations, interval
-        )
-        times = create_times_from_durations(
-            start=start_time, durations=stepped_durations
-        )
-        return {
-            "coords": stepped_coords,
-            "durations": stepped_durations,
-            "times": times,
-        }
+        (
+            stepped_coords,
+            stepped_durations,
+            stepped_indexes,
+        ) = split_coords_by_duration_interval(coords, durations, interval)
+        create_times_from_durations(start=start_time, durations=stepped_durations)
+        segments = split_coords_into_segments(coords, stepped_indexes)
+        line_strings = create_line_strings_from_segments(segments)
+        feature_collection = create_feature_collection(line_strings)
+
+        return feature_collection
     else:
         return {"error": "No route found"}
